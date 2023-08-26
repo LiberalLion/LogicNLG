@@ -1,42 +1,54 @@
 import numpy
 
-APIs = {}
-
-# With only one argument
-APIs['count'] = {"argument": ['row'], 'output': 'num',
-                 'function': lambda t:  len(t),
-                 'tostr': lambda t: "count{{{}}}".format(t),
-                 'append': True}
-
-APIs['inc_num'] = {"argument": ['num'], 'output': 'num',
-                   "function": lambda t: t,
-                   "tostr": lambda t: "inc_num{{{}}}".format(t),
-                   'append': False}
-
-APIs['dec_num'] = {"argument": ['num'], 'output': 'none',
-                   "function": lambda t: None,
-                   "tostr": lambda t: "dec_num{{{}}}".format(t),
-                   'append': False}
-
-APIs['dec_str'] = {"argument": ['str'], 'output': 'none',
-                   "function": lambda t: None,
-                   "tostr": lambda t: "dec_str{{{}}}".format(t),
-                   'append': False}
-
-APIs['inc_str'] = {"argument": ['str'], 'output': 'str',
-                   "function": lambda t: t,
-                   "tostr": lambda t: "inc_str{{{}}}".format(t),
-                   'append': False}
-
-APIs['all_exist'] = {"argument": ['strs'], 'output': 'bool',
-                   "function": lambda t: True,
-                   "tostr": lambda t: array_to_exist(t),
-                   'append': True}
+APIs = {
+    'count': {
+        "argument": ['row'],
+        'output': 'num',
+        'function': lambda t: len(t),
+        'tostr': lambda t: "count{{{}}}".format(t),
+        'append': True,
+    },
+    'inc_num': {
+        "argument": ['num'],
+        'output': 'num',
+        "function": lambda t: t,
+        "tostr": lambda t: "inc_num{{{}}}".format(t),
+        'append': False,
+    },
+    'dec_num': {
+        "argument": ['num'],
+        'output': 'none',
+        "function": lambda t: None,
+        "tostr": lambda t: "dec_num{{{}}}".format(t),
+        'append': False,
+    },
+    'dec_str': {
+        "argument": ['str'],
+        'output': 'none',
+        "function": lambda t: None,
+        "tostr": lambda t: "dec_str{{{}}}".format(t),
+        'append': False,
+    },
+    'inc_str': {
+        "argument": ['str'],
+        'output': 'str',
+        "function": lambda t: t,
+        "tostr": lambda t: "inc_str{{{}}}".format(t),
+        'append': False,
+    },
+    'all_exist': {
+        "argument": ['strs'],
+        'output': 'bool',
+        "function": lambda t: True,
+        "tostr": lambda t: array_to_exist(t),
+        'append': True,
+    },
+}
 
 def array_to_exist(t):
   output = 'exist{'
   for _ in t:
-    output += _ + '; '
+    output += f'{_}; '
   output = output[:-2]
   output += '}'
   return output
@@ -61,6 +73,7 @@ APIs['not_within_n_n'] = {"argument": ['row', 'header_num', 'num'], 'output': 'b
                           "tostr": lambda t, col, value: "not_within{{{}; {}; {}}}".format(t, col, value),
                           'append': None}
 """
+
 APIs['none'] = {"argument": ['str'], 'output': 'bool',
                 "function": lambda t: none(t),
                 "tostr": lambda t: "none{{{}}}".format(t),
@@ -291,10 +304,14 @@ APIs["all_str_eq"] = {"argument": ['row', ['header_str', 'str']], "output": "boo
                       "tostr": lambda t, col, value: "all_eq{{{}; {}; {}}}".format(t, col, value),
                       "append": None}
 
-APIs["all_str_not_eq"] = {"argument": ['row', ['header_str', 'str']], "output": "bool",
-                          "function": lambda t, col, value: 0 == len(fuzzy_match(t, col, value)),
-                          "tostr": lambda t, col, value: "all_not_eq{{{}; {}; {}}}".format(t, col, value),
-                          "append": None}
+APIs["all_str_not_eq"] = {
+    "argument": ['row', ['header_str', 'str']],
+    "output": "bool",
+    "function": lambda t, col, value: len(fuzzy_match(t, col, value)) == 0,
+    "tostr":
+    lambda t, col, value: "all_not_eq{{{}; {}; {}}}".format(t, col, value),
+    "append": None,
+}
 
 
 APIs["all_eq"] = {"argument": ['row', ['header_num', 'num']], "output": "bool",
@@ -302,10 +319,14 @@ APIs["all_eq"] = {"argument": ['row', ['header_num', 'num']], "output": "bool",
                   "tostr": lambda t, col, value: "all_eq{{{}; {}; {}}}".format(t, col, value),
                   "append": None}
 
-APIs["all_not_eq"] = {"argument": ['row', ['header_num', 'num']], "output": "bool",
-                      "function": lambda t, col, value: 0 == len(t[t[col] == value]),
-                      "tostr": lambda t, col, value: "all_not_eq{{{}; {}; {}}}".format(t, col, value),
-                      "append": None}
+APIs["all_not_eq"] = {
+    "argument": ['row', ['header_num', 'num']],
+    "output": "bool",
+    "function": lambda t, col, value: len(t[t[col] == value]) == 0,
+    "tostr":
+    lambda t, col, value: "all_not_eq{{{}; {}; {}}}".format(t, col, value),
+    "append": None,
+}
 
 APIs["all_less"] = {"argument": ['row', ['header_num', 'num']], "output": "bool",
                     "function": lambda t, col, value: len(t) == len(t[t[col] < value]),
@@ -359,26 +380,20 @@ def is_ascii(s):
 def fuzzy_match(t, col, val, negate=False):
   if not is_ascii(val):
     return t[t[col].str.contains(val, regex=False, na=False)]
-  else:
-    try:
+  try:
       # Try using regular expression
-      reg_val = ["(?=.*{})".format(_) for _ in val.split(' ')]
-      reg_val = "".join(reg_val)
-      if negate:
-        returned = t[~t[col].str.contains(reg_val, regex=True, na=False)]
-      else:
-        returned = t[t[col].str.contains(reg_val, regex=True, na=False)]
-      return returned
-    except Exception:
-      # Backoff to full string matching
-      return t[t[col].str.contains(val, regex=False, na=False)]
+    reg_val = [f"(?=.*{_})" for _ in val.split(' ')]
+    reg_val = "".join(reg_val)
+    return (t[~t[col].str.contains(reg_val, regex=True, na=False)] if negate
+            else t[t[col].str.contains(reg_val, regex=True, na=False)])
+  except Exception:
+    # Backoff to full string matching
+    return t[t[col].str.contains(val, regex=False, na=False)]
 
 
 def none(t):
-  if 'none' in t or 'n / a' in t or 'no information' in t or t == '-' or t == 'no':
-    return True
-  else:
-    return False
+  return ('none' in t or 'n / a' in t or 'no information' in t or t == '-'
+          or t == 'no')
 
 
 def inner(t, t1):
@@ -387,42 +402,31 @@ def inner(t, t1):
   col1, col2, col3, col4 = t.columns[0], t.columns[1], t.columns[2], t.columns[3]
   val1, val2, val3, val4 = t1[col1].values[0], t1[col2].values[0],  t1[col3].values[0], t1[col4].values[0]
   idx = t.loc[(t[col1] == val1) & (t[col2] == val2) & (t[col3] == val3) & (t[col4] == val4)].index
-  if len(idx) > 0:
-    return idx[0].item()
-  else:
-    return None
+  return idx[0].item() if len(idx) > 0 else None
 
 
 def n_th(t, t1, num):
   tmp = inner(t, t1)
-  if tmp is None:
-    return None
-  else:
-    return tmp == num
+  return None if tmp is None else tmp == num
 
 
 def row_select(t, t1, bias):
   col1, col2, col3, col4 = t.columns[0], t.columns[1], t.columns[2], t.columns[3]
   val1, val2, val3, val4 = t1[col1].values[0], t1[col2].values[0],  t1[col3].values[0], t1[col4].values[0]
   idx = t.loc[(t[col1] == val1) & (t[col2] == val2) & (t[col3] == val3) & (t[col4] == val4)].index + bias
-  if idx[0] < len(t) and idx[0] >= 0:
-    return t.loc[idx]
-  else:
-    return None
+  return t.loc[idx] if idx[0] < len(t) and idx[0] >= 0 else None
 
 
 def most_freq(t, col):
   value_counts = t[col].value_counts()
-  if value_counts.max() == 1:
-    return None
-  else:
-    return value_counts.idxmax()
+  return None if value_counts.max() == 1 else value_counts.idxmax()
 
 triggers = {}
-non_triggers = {}
+non_triggers = {
+    'avg': ['average'],
+    'uniq_num': ['separate', 'different', 'unique'],
+}
 
-non_triggers['avg'] = ['average']
-non_triggers['uniq_num'] = ['separate', 'different', 'unique']
 non_triggers['uniq_str'] = non_triggers['uniq_num']
 
 non_triggers['diff'] = ['after', 'before', 'difference', 'gap', 'than', 'separate', 'except', 'but', 'separation']

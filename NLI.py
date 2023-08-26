@@ -26,7 +26,7 @@ def parse_opt():
     parser.add_argument('--max_len', default=30, type=int, help="maximum length")
     parser.add_argument('--do_train', default=False, action="store_true", help="whether to train or test the model")
     parser.add_argument('--do_test', default=False, action="store_true", help="whether to train or test the model")
-    parser.add_argument('--do_verify', default=False, action="store_true", help="whether to verify")    
+    parser.add_argument('--do_verify', default=False, action="store_true", help="whether to verify")
     parser.add_argument('--simple', default=False, action="store_true", help="which version of test to use")
     parser.add_argument('--complex', default=False, action="store_true", help="which version of test to use")
     parser.add_argument('--fp16', default=False, action="store_true", help="whether to use fp16")
@@ -43,7 +43,7 @@ def parse_opt():
     parser.add_argument('--model', default='bert-base-multilingual-uncased', type=str, help='base model')
     parser.add_argument('--output_dir', default='models/baseline', type=str, help='output directory')
     parser.add_argument('--verify_file', default=None, type=str, help='Input verify file')
-    parser.add_argument('--verify_linking', default=None, type=str, help='Link file to obtain meta information')    
+    parser.add_argument('--verify_linking', default=None, type=str, help='Link file to obtain meta information')
     parser.add_argument('--encoding', default='concat', type=str,
                         help='the type of table encoder; choose from concat|row|cell')
     parser.add_argument('--max_length', default=512, type=int, help='sequence length constraint')
@@ -51,13 +51,11 @@ def parse_opt():
     parser.add_argument('--id', default=1, type=int, help='model id')
     parser.add_argument('--attention', default='cross', type=str,
                         help='the attention used for interaction between statement and table')
-    parser.add_argument("--csv_path", default='data/all_csv', type=str, help="all_csv path")    
-    args = parser.parse_args()
-
-    return args
+    parser.add_argument("--csv_path", default='data/all_csv', type=str, help="all_csv path")
+    return parser.parse_args()
 
 def forward_pass(f, example, model, split):
-    table = pandas.read_csv('{}/{}'.format(args.csv_path, f), '#')
+    table = pandas.read_csv(f'{args.csv_path}/{f}', '#')
     table = table.head(40)
 
     cols = table.columns
@@ -75,134 +73,127 @@ def forward_pass(f, example, model, split):
         statements = [statements[_] for _ in selected_idxs]
         sub_cols = [sub_cols[_] for _ in selected_idxs]
         labels = [labels[_] for _ in selected_idxs]
-    elif split == 'test':
-        pass
+    if 'gnn' not in args.encoding:
+        raise NotImplementedError
 
-    tab_len = len(table)
-    batch_size = len(statements)
-    if 'gnn' in args.encoding:
-        texts = []
-        segs = []
-        masks = []
-        mapping = {}
-        cur_index = 0
-        for sub_col, stat in zip(sub_cols, statements):
-            table_inp = []
-            lengths = []
+    texts = []
+    segs = []
+    masks = []
+    mapping = {}
+    for cur_index, (sub_col, stat) in enumerate(zip(sub_cols, statements)):
+        table_inp = []
+        lengths = []
 
-            stat_inp = tokenizer.tokenize('[CLS] ' + stat + ' [SEP]')
-            tit_inp = tokenizer.tokenize('title is : ' + title + ' .')
-            mapping[(cur_index, -1, -1)] = (0, len(stat_inp))
+        stat_inp = tokenizer.tokenize('[CLS] ' + stat + ' [SEP]')
+        tit_inp = tokenizer.tokenize('title is : ' + title + ' .')
+        mapping[(cur_index, -1, -1)] = (0, len(stat_inp))
 
-            prev_position = position = len(stat_inp) + len(tit_inp)
-            for i in range(len(table)):
-                tmp = tokenizer.tokenize('row {} is : '.format(i + 1))
+        prev_position = position = len(stat_inp) + len(tit_inp)
+        for i in range(len(table)):
+            tmp = tokenizer.tokenize(f'row {i + 1} is : ')
+            table_inp.extend(tmp)
+            position += len(tmp)
+
+            entry = table.iloc[i]
+            for j, col in enumerate(sub_col):
+                tmp = tokenizer.tokenize(f'{cols[col]} is {entry[col]} , ')
+                mapping[(cur_index, i, j)] = (position, position + len(tmp))
                 table_inp.extend(tmp)
                 position += len(tmp)
 
-                entry = table.iloc[i]
-                for j, col in enumerate(sub_col):
-                    tmp = tokenizer.tokenize('{} is {} , '.format(cols[col], entry[col]))
-                    mapping[(cur_index, i, j)] = (position, position + len(tmp))
-                    table_inp.extend(tmp)
-                    position += len(tmp)
+            lengths.append(position - prev_position)
+            prev_position = position
 
-                lengths.append(position - prev_position)
-                prev_position = position
+        # Tokens
+        tokens = stat_inp + tit_inp + table_inp
+        tokens = tokens[:args.max_length]
+        token_ids = tokenizer.convert_tokens_to_ids(tokens)
+        texts.append(token_ids)
 
-            # Tokens
-            tokens = stat_inp + tit_inp + table_inp
-            tokens = tokens[:args.max_length]
-            token_ids = tokenizer.convert_tokens_to_ids(tokens)
-            texts.append(token_ids)
+        # Segment Ids
+        seg = [0] * len(stat_inp) + [1] * (len(tit_inp) + len(table_inp))
+        seg = seg[:args.max_length]
+        segs.append(seg)
 
-            # Segment Ids
-            seg = [0] * len(stat_inp) + [1] * (len(tit_inp) + len(table_inp))
-            seg = seg[:args.max_length]
-            segs.append(seg)
+        # Masks
+        mask = torch.zeros(len(token_ids), len(token_ids))
+        start = 0
+        if args.encoding == 'gnn_ind':
+            mask[start:start + len(stat_inp), start:start + len(stat_inp)] = 1
+        else:
+            mask[start:start + len(stat_inp), :] = 1
+        start += len(stat_inp)
 
-            # Masks
-            mask = torch.zeros(len(token_ids), len(token_ids))
-            start = 0
-            if args.encoding == 'gnn_ind':
-                mask[start:start + len(stat_inp), start:start + len(stat_inp)] = 1
-            else:
-                mask[start:start + len(stat_inp), :] = 1
-            start += len(stat_inp)
+        mask[start:start + len(tit_inp), start:start + len(tit_inp)] = 1
 
-            mask[start:start + len(tit_inp), start:start + len(tit_inp)] = 1
+        start += len(tit_inp)
+        for l in lengths:
+            if args.encoding != 'gnn_ind':
+                mask[start:start + l, :len(stat_inp) + len(tit_inp)] = 1
+            mask[start:start + l, start:start + l] = 1
+            start += l
+        masks.append(mask)
+    max_len = max(len(_) for _ in texts)
+    for i in range(len(texts)):
+        # Padding the mask
+        tmp = torch.zeros(max_len, max_len)
+        tmp[:masks[i].shape[0], :masks[i].shape[1]] = masks[i]
+        masks[i] = tmp.unsqueeze(0)
 
-            start += len(tit_inp)
-            for l in lengths:
-                if args.encoding != 'gnn_ind':
-                    mask[start:start + l, :len(stat_inp) + len(tit_inp)] = 1
-                mask[start:start + l, start:start + l] = 1
-                start += l
-            masks.append(mask)
-            cur_index += 1
+        # Padding the Segmentation
+        segs[i] = segs[i] + [0] * (max_len - len(segs[i]))
+        texts[i] = texts[i] + [tokenizer.pad_token_id] * (max_len - len(texts[i]))
 
-        max_len = max([len(_) for _ in texts])
-        for i in range(len(texts)):
-            # Padding the mask
-            tmp = torch.zeros(max_len, max_len)
-            tmp[:masks[i].shape[0], :masks[i].shape[1]] = masks[i]
-            masks[i] = tmp.unsqueeze(0)
+    # Transform into tensor vectors
+    inps = torch.tensor(texts).to(device)
+    seg_inps = torch.tensor(segs).to(device)
+    mask_inps = torch.cat(masks, 0).to(device)
 
-            # Padding the Segmentation
-            segs[i] = segs[i] + [0] * (max_len - len(segs[i]))
-            texts[i] = texts[i] + [tokenizer.pad_token_id] * (max_len - len(texts[i]))
+    inputs = {'input_ids': inps, 'attention_mask': mask_inps, 'token_type_ids': seg_inps}
+    representation = model('row', **inputs)[0]
 
-        # Transform into tensor vectors
-        inps = torch.tensor(texts).to(device)
-        seg_inps = torch.tensor(segs).to(device)
-        mask_inps = torch.cat(masks, 0).to(device)
+    max_len_col = max(len(_) for _ in sub_cols)
+    batch_size = len(statements)
+    max_len_stat = max(mapping[(_, -1, -1)][1] for _ in range(batch_size))
+    stat_representation = torch.zeros(batch_size, max_len_stat, representation.shape[-1])
+    tab_len = len(table)
+    graph_representation = torch.zeros(batch_size, tab_len, max_len_col, representation.shape[-1])
 
-        inputs = {'input_ids': inps, 'attention_mask': mask_inps, 'token_type_ids': seg_inps}
-        representation = model('row', **inputs)[0]
-
-        max_len_col = max([len(_) for _ in sub_cols])
-        max_len_stat = max([mapping[(_, -1, -1)][1] for _ in range(batch_size)])
-        stat_representation = torch.zeros(batch_size, max_len_stat, representation.shape[-1])
-        graph_representation = torch.zeros(batch_size, tab_len, max_len_col, representation.shape[-1])
-
-        table_masks = []
-        stat_masks = []
-        for i in range(batch_size):
-            mask = []
-            for j in range(tab_len):
-                for k in range(max_len_col):
-                    if (i, j, k) in mapping:
-                        start, end = mapping[(i, j, k)]
-                        if start < representation.shape[1]:
-                            tmp = representation[i, start:end]
-                            tmp = torch.mean(tmp, 0)
-                            graph_representation[i][j][k] = tmp
-                            mask.append(1)
-                        else:
-                            mask.append(0)
+    table_masks = []
+    stat_masks = []
+    for i in range(batch_size):
+        mask = []
+        for j in range(tab_len):
+            for k in range(max_len_col):
+                if (i, j, k) in mapping:
+                    start, end = mapping[(i, j, k)]
+                    if start < representation.shape[1]:
+                        tmp = representation[i, start:end]
+                        tmp = torch.mean(tmp, 0)
+                        graph_representation[i][j][k] = tmp
+                        mask.append(1)
                     else:
                         mask.append(0)
-            table_masks.append(mask)
+                else:
+                    mask.append(0)
+        table_masks.append(mask)
 
-            start, end = mapping[(i, -1, -1)]
-            stat_representation[i, start:end] = representation[i, start:end]
-            stat_masks.append([1] * end + [0] * (max_len_stat - end))
+        start, end = mapping[(i, -1, -1)]
+        stat_representation[i, start:end] = representation[i, start:end]
+        stat_masks.append([1] * end + [0] * (max_len_stat - end))
 
-        stat_representation = stat_representation.to(device)
-       	graph_representation = graph_representation.view(batch_size, -1, graph_representation.shape[-1]).to(device)
+    stat_representation = stat_representation.to(device)
+    graph_representation = graph_representation.view(batch_size, -1, graph_representation.shape[-1]).to(device)
 
-        if args.attention == 'self':
-            x_masks = torch.cat([torch.tensor(stat_masks), torch.tensor(table_masks)], 1).to(device)
-            representation = torch.cat([stat_representation, graph_representation], 1)
-            inputs = {'x': representation.to(device), 'x_mask': (1 - x_masks).unsqueeze(1).unsqueeze(2).bool()}
-            logits = model('sa', **inputs)
-        elif args.attention == 'cross':
-            inputs = {'x': stat_representation, 'x_mask': torch.tensor(stat_masks).to(device),
-                      'y': graph_representation, 'y_mask': torch.tensor(table_masks).to(device)}
-            logits = model('sa', **inputs)
-
-    else:
-        raise NotImplementedError
+    if args.attention == 'self':
+        x_masks = torch.cat([torch.tensor(stat_masks), torch.tensor(table_masks)], 1).to(device)
+        representation = torch.cat([stat_representation, graph_representation], 1)
+        inputs = {'x': representation.to(device), 'x_mask': (1 - x_masks).unsqueeze(1).unsqueeze(2).bool()}
+        logits = model('sa', **inputs)
+    elif args.attention == 'cross':
+        inputs = {'x': stat_representation, 'x_mask': torch.tensor(stat_masks).to(device),
+                  'y': graph_representation, 'y_mask': torch.tensor(table_masks).to(device)}
+        logits = model('sa', **inputs)
 
     labels = torch.LongTensor(labels).to(device)
 

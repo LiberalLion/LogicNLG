@@ -41,13 +41,13 @@ def sample_sequence(model, length, context, args, num_samples=1, temperature=1, 
 
     generated = context
     batch_size = generated.shape[0]
-    
+
     finished_template = [False for _ in range(batch_size)]
     finished_sentence = [False for _ in range(batch_size)]
     with torch.no_grad():
         for _ in range(length):
             outputs = model(generated, *args)
-            if isinstance(outputs, list) or isinstance(outputs, tuple):
+            if isinstance(outputs, (list, tuple)):
                 next_token_logits = outputs[0][:, -1, :] / (temperature if temperature > 0 else 1.)
             else:
                 next_token_logits = outputs[:, -1, :] / (temperature if temperature > 0 else 1.)
@@ -69,7 +69,7 @@ def sample_sequence(model, length, context, args, num_samples=1, temperature=1, 
                 next_token = torch.argmax(filtered_logits, dim=-1).unsqueeze(-1)
             else:
                 next_token = torch.multinomial(F.softmax(filtered_logits, dim=-1), num_samples=1)
-            
+
             if trigger:
                 for b in range(batch_size):
                     if next_token[b].item() == trigger:

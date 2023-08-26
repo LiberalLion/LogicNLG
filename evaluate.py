@@ -43,4 +43,4 @@ bleu_1 = sum(sent_bleus_1) / len(sent_bleus_1)
 bleu_2 = sum(sent_bleus_2) / len(sent_bleus_2)
 bleu_3 = sum(sent_bleus_3) / len(sent_bleus_3)
 
-print("{}/{}/{}".format(bleu_1, bleu_2, bleu_3))
+print(f"{bleu_1}/{bleu_2}/{bleu_3}")

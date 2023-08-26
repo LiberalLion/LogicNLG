@@ -251,8 +251,7 @@ class BERTGen(nn.Module):
         tgt_feat = self.encoder(trg_inp)[0]
 
         src_feat = src_feat.repeat(tgt_feat.shape[0], 1, 1)
-        logits = self.model(trg_inp, src_feat, tgt_feat)
-        return logits
+        return self.model(trg_inp, src_feat, tgt_feat)
 
     def encode(self, caption):
         return self.encoder(caption)[0]
@@ -293,8 +292,7 @@ class TableDecoder(nn.Module):
                                      slf_attn_mask=slf_attn_mask,
                                      dec_enc_attn_mask=dec_enc_attn_mask)
 
-        logits = self.tgt_word_prj(dec_output)
-        return logits
+        return self.tgt_word_prj(dec_output)
 
 
 class TableInfusing(nn.Module):
@@ -326,9 +324,7 @@ class TableInfusing(nn.Module):
 
     def forward(self, seqs_in, table_in, table_scatters, lookups, line_nos, fields, indexes):
         enc_inp = self.encode(table_in, lookups, line_nos, fields, indexes)
-        logits = self.decode(seqs_in, enc_inp, table_scatters)
-
-        return logits
+        return self.decode(seqs_in, enc_inp, table_scatters)
 
     def encode(self, table_in, lookups, line_nos, fields, indexes):
         field_emb = self.embed(fields).transpose(1, 0)
@@ -397,9 +393,7 @@ class TableInfusing(nn.Module):
         full_prob = torch.cat([in_vocab_prob * (1 - gate) * self.discount, add_on], -1)
 
         full_prob = full_prob.scatter_add(2, table_scatters.unsqueeze(1).repeat(1, length, 1), oov_vocab_prob * gate)
-        full_logits = torch.log(full_prob)
-
-        return full_logits
+        return torch.log(full_prob)
 
 
 class Ranker(nn.Module):
@@ -451,8 +445,7 @@ class Ranker(nn.Module):
                 slf_attn_mask=slf_attn_mask,
                 dec_enc_attn_mask=dec_enc_attn_mask)
 
-        logits = self.tgt_word_prj(dec_output[:, 0])
-        return logits
+        return self.tgt_word_prj(dec_output[:, 0])
 
     def prob(self, prog, sent):
         logits = self.forward(prog, sent)
@@ -465,7 +458,7 @@ class BERTRanker(nn.Module):
         super(BERTRanker, self).__init__()
         self.base = model_class.from_pretrained(
             model_name_or_path,
-            from_tf=bool(".ckpt" in model_name_or_path),
+            from_tf=".ckpt" in model_name_or_path,
             config=config,
             cache_dir=cache_dir if cache_dir else None,
         )
@@ -474,8 +467,7 @@ class BERTRanker(nn.Module):
     def forward(self, input_tokens, input_types, input_masks):
         inputs = {"input_ids": input_tokens, "token_type_ids": input_types, "attention_mask": input_masks}
         _, text_representation = self.base(**inputs)
-        logits = self.proj(text_representation)
-        return logits
+        return self.proj(text_representation)
 
     def prob(self, input_tokens, input_types, input_masks):
         inputs = {"input_ids": input_tokens, "token_type_ids": input_types, "attention_mask": input_masks}

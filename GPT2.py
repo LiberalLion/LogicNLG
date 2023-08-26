@@ -390,25 +390,19 @@ if __name__ == '__main__':
             gpt_mapping = []
             count = 0
             for i, x in enumerate(GPT_tokens):
-                if x[0] == '\u0120' or i == 0:
-                    gpt_mapping.append(count)
-                    count += 1
-                else:
+                if x[0] != '\u0120' and i != 0:
                     count -= 1
-                    gpt_mapping.append(count)
-                    count += 1
+                gpt_mapping.append(count)
+                count += 1
             sentence = tokenizer.convert_tokens_to_string(GPT_tokens)
             ids = bert_tokenizer.tokenize(sentence)
             bert_mapping = []
             count = 0
-            for i, x in enumerate(ids):
+            for x in ids:
                 if x.startswith('##'):
                     count -= 1
-                    bert_mapping.append(count)
-                    count += 1
-                else:
-                    bert_mapping.append(count)
-                    count += 1
+                bert_mapping.append(count)
+                count += 1
             # start calculating rewards
             sent_rewards = []
             tmp = []
@@ -420,11 +414,7 @@ if __name__ == '__main__':
                     tmp.append(rewards[i])
             sent_rewards.append(sum(tmp) / len(tmp))
 
-            token_rewards = []
-            for _ in gpt_mapping:
-                token_rewards.append(sent_rewards[_])
-
-            return token_rewards
+            return [sent_rewards[_] for _ in gpt_mapping]
 
         model.load_state_dict(torch.load(args.load_from))
         print("loading from {}".format(args.load_from))

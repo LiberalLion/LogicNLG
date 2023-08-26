@@ -36,7 +36,7 @@ def clean_str(strings):
     new_strings = []
     for string in strings:
         string = re.sub(r' +', ' ', string)
-        if len(string.split(' ')) < 6 and len(new_strings) > 0:
+        if len(string.split(' ')) < 6 and new_strings:
             string = new_strings[-1]
         new_strings.append(string)
     return new_strings

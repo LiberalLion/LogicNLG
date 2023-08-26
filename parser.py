@@ -29,7 +29,7 @@ with open('data/stop_words.json') as f:
 months_a = ['january', 'february', 'march', 'april', 'may', 'june',
                  'july', 'august', 'september', 'october', 'november', 'december']
 months_b = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
-a2b = {a: b for a, b in zip(months_a, months_b)}
+a2b = dict(zip(months_a, months_b))
 b2a = {b: a for a, b in zip(months_a, months_b)}
 
 
@@ -61,31 +61,25 @@ def tree_eq(tree1, tree2):
     if isinstance(tree1, str) and isinstance(tree2, str):
         if tree1 == tree2:
             return True
-        else:
-            tree1 = normalize(tree1)
-            tree2 = normalize(tree2)
-            
-            if edit_distance(tree1, tree2) == 1 and len(tree1) >= 3:
-                return True
-            else:
-                if " " + tree1 + " "  in " " + tree2 + " " or " " + tree2 + " "  in " " + tree1 + " ":
-                    return True
-                else:
-                    return False
+        tree1 = normalize(tree1)
+        tree2 = normalize(tree2)
 
+        return (
+            True
+            if edit_distance(tree1, tree2) == 1 and len(tree1) >= 3
+            else " " + tree1 + " " in " " + tree2 + " "
+            or " " + tree2 + " " in " " + tree1 + " "
+        )
     elif isinstance(tree1, ProgramNode) and isinstance(tree2, ProgramNode):
-        if tree1.name == tree2.name:
-            if len(tree1.children) == len(tree2.children):
-                if tree1.name in ['eq', 'and']:
-                    t1 = tree_eq(tree1.children[0], tree2.children[0]) and tree_eq(tree1.children[1], tree2.children[1])
-                    t2 = tree_eq(tree1.children[0], tree2.children[1]) and tree_eq(tree1.children[1], tree2.children[0])
-                    return t1 or t2
-                else:
-                    return all([tree_eq(t1, t2) for t1, t2 in zip(tree1.children, tree2.children)])
-            else:
-                return False
-        else:
+        if tree1.name != tree2.name:
             return False
+        if len(tree1.children) != len(tree2.children):
+            return False
+        if tree1.name not in ['eq', 'and']:
+            return all(tree_eq(t1, t2) for t1, t2 in zip(tree1.children, tree2.children))
+        t1 = tree_eq(tree1.children[0], tree2.children[0]) and tree_eq(tree1.children[1], tree2.children[1])
+        t2 = tree_eq(tree1.children[0], tree2.children[1]) and tree_eq(tree1.children[1], tree2.children[0])
+        return t1 or t2
     else:
         return False
 
@@ -93,12 +87,15 @@ def tree_eq(tree1, tree2):
 def recursion(string):
     stack = []
     prev = ''
-    if ' ; ' in string:
-        arrays = string.split(' ')
-    else:
-        arrays = split_prog(string)
+    arrays = string.split(' ') if ' ; ' in string else split_prog(string)
     for c in arrays:
-        if c == '{':
+        if c == ';':
+            try:
+                stack[-1].append_child(prev)
+                prev = ''
+            except Exception:
+                raise ValueError
+        elif c == '{':
             node = ProgramNode(prev)
             #if len(stack) == 0:
             stack.append(node)
@@ -107,17 +104,10 @@ def recursion(string):
             r = stack.pop(-1)
             r.append_child(prev)
             prev = r
-        elif c == ';':
-            try:
-                stack[-1].append_child(prev)
-                prev = ''
-            except Exception:
-                raise ValueError
+        elif prev == '':
+            prev = c
         else:
-            if prev == '':
-                prev = c
-            else:
-                prev += " " + c
+            prev += " " + c
     return prev
 
 
@@ -152,14 +142,13 @@ class Node(object):
         self.row_counter = [1]
 
     def done(self):
-        if self.memory_str_len == 0 and self.memory_num_len == 0 and \
-                self.memory_bool_len == 0 and all([_ > 0 for _ in self.row_counter]):
-            for funcs in self.must_have:
-                if any([f in self.cur_funcs for f in funcs]):
-                    continue
-                else:
-                    return False
-            return True
+        if (
+            self.memory_str_len == 0
+            and self.memory_num_len == 0
+            and self.memory_bool_len == 0
+            and all(_ > 0 for _ in self.row_counter)
+        ):
+            return all(any(f in self.cur_funcs for f in funcs) for funcs in self.must_have)
         else:
             return False
 
@@ -214,13 +203,13 @@ class Node(object):
         return hash(frozenset(self.cur_strs))
 
     def append_result(self, command, r):
-        self.cur_str = "{}={}".format(command, r)
+        self.cur_str = f"{command}={r}"
 
     def append_bool(self, r):
         if self.cur_str != "":
-            self.cur_str += ";{}".format(r)
+            self.cur_str += f";{r}"
         else:
-            self.cur_str = "{}".format(r)
+            self.cur_str = f"{r}"
 
     def get_memory_str(self, i):
         return self.memory_str[i][1]
@@ -229,11 +218,7 @@ class Node(object):
         return self.memory_num[i][1]
 
     def add_memory_num(self, header, val, command):
-        if type(val) == type(1) or type(val) == type(1.2):
-            val = val
-        else:
-            val = val.item()
-
+        val = val if type(val) in [type(1), type(1.2)] else val.item()
         self.memory_num.append((header, val))
         self.trace_num.append(command)
 
@@ -241,14 +226,14 @@ class Node(object):
         if isinstance(val, bool):
             self.memory_bool.append((header, val))
         else:
-            raise ValueError("type error: {}".format(type(val)))
+            raise ValueError(f"type error: {type(val)}")
 
     def add_memory_str(self, header, val, command):
         if isinstance(val, str):
             self.memory_str.append((header, val))
             self.trace_str.append(command)
         else:
-            raise ValueError("type error: {}".format(type(val)))
+            raise ValueError(f"type error: {type(val)}")
 
     def add_header_str(self, header):
         self.header_str.append(header)
@@ -261,7 +246,7 @@ class Node(object):
             # for row_h, row in self.rows:
             #    if len(row) == len(val) and row.iloc[0][0] == val.iloc[0][0]:
             #        return
-            if any([row_h == header for row_h, row in self.rows]):
+            if any(row_h == header for row_h, row in self.rows):
                 return
             self.rows.append((header, val.reset_index(drop=True)))
             self.row_counter.append(0)
@@ -277,9 +262,8 @@ class Node(object):
         for k in range(len(self.memory_num)):
             if k in args:
                 continue
-            else:
-                new_mem_num.append(self.memory_num[k])
-                new_trace_num.append(self.trace_num[k])
+            new_mem_num.append(self.memory_num[k])
+            new_trace_num.append(self.trace_num[k])
 
         self.memory_num = new_mem_num
         self.trace_num = new_trace_num
@@ -290,21 +274,18 @@ class Node(object):
         for k in range(len(self.memory_str)):
             if k in args:
                 continue
-            else:
-                new_mem_str.append(self.memory_str[k])
-                new_trace_str.append(self.trace_str[k])
+            new_mem_str.append(self.memory_str[k])
+            new_trace_str.append(self.trace_str[k])
 
         self.memory_str = new_mem_str
         self.trace_str = new_trace_str
 
     def delete_memory_bool(self, *args):
-        new_bool = []
-        for k in range(len(self.memory_bool)):
-            if k in args:
-                continue
-            else:
-                new_bool.append(self.memory_bool[k])
-
+        new_bool = [
+            self.memory_bool[k]
+            for k in range(len(self.memory_bool))
+            if k not in args
+        ]
         self.memory_bool= new_bool
 
     def check(self, *args):
@@ -314,40 +295,34 @@ class Node(object):
                 continue
 
             if arg == ['header_str', 'string']:
-                if any([k is not None for k, v in self.memory_str]):
+                if any(k is not None for k, v in self.memory_str):
                     continue
                 else:
                     return False
 
             if arg == ['header_num', 'number']:
-                if any([k is not None for k, v in self.memory_num]):
+                if any(k is not None for k, v in self.memory_num):
                     continue
                 else:
                     return False
 
-            if arg == 'string':
-                if len(self.memory_str) > 0:
-                    continue
-                else:
-                    return False
-
-            if arg == 'number':
-                if len(self.memory_num) > 0:
-                    continue
-                else:
-                    return False
-
-            if arg == 'header_str':
-                if len(self.header_str) > 0:
-                    continue
-                else:
-                    return False
-
-            if arg == 'header_num':
-                if len(self.header_num) > 0:
-                    continue
-                else:
-                    return False
+            if (
+                arg == 'header_num'
+                and len(self.header_num) <= 0
+                or arg != 'header_num'
+                and arg == 'header_str'
+                and len(self.header_str) <= 0
+                or arg != 'header_num'
+                and arg != 'header_str'
+                and arg == 'number'
+                and len(self.memory_num) <= 0
+                or arg != 'header_num'
+                and arg != 'header_str'
+                and arg != 'number'
+                and arg == 'string'
+                and len(self.memory_str) <= 0
+            ):
+                return False
         return True
 
 

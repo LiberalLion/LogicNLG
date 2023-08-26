@@ -70,12 +70,11 @@ if __name__ == '__main__':
 
     if args.local_rank == -1:
         device = torch.device("cuda")
-        args.n_gpu = 1
     else:
         torch.cuda.set_device(args.local_rank)
         device = torch.device('cuda', args.local_rank)
         torch.distributed.init_process_group(backend='nccl')
-        args.n_gpu = 1
+    args.n_gpu = 1
     args.device = device
 
     if args.local_rank not in [-1, 0]:
@@ -94,15 +93,15 @@ if __name__ == '__main__':
         if args.local_rank in [-1, 0]:
             if not os.path.exists(args.id):
                 os.mkdir(args.id)
-            tb_writer = SummaryWriter(log_dir='tensorboard/GPT2-{}'.format(args.model))
-        
+            tb_writer = SummaryWriter(log_dir=f'tensorboard/GPT2-{args.model}')
+
         dataset = GPTTableDataset2('data/train_lm_preprocessed.json', tokenizer, args.max_len)
-        
+
         if args.local_rank == -1:
             sampler = RandomSampler(dataset)
         else:
             sampler = DistributedSampler(dataset)
-        
+
         train_dataloader = DL(dataset, sampler=sampler, batch_size=args.batch_size, num_workers=0)
 
         model.train()
@@ -165,9 +164,9 @@ if __name__ == '__main__':
 
             if args.local_rank in [-1, 0]:
                 if args.model == 'gpt2':
-                    torch.save(model.state_dict(), '{}/GPT_ep{}.pt'.format(args.id, epoch_idx))
+                    torch.save(model.state_dict(), f'{args.id}/GPT_ep{epoch_idx}.pt')
                 else:
-                    torch.save(model.state_dict(), '{}/GPT_medium_ep{}.pt'.format(args.id, epoch_idx))
-        
+                    torch.save(model.state_dict(), f'{args.id}/GPT_medium_ep{epoch_idx}.pt')
+
         if args.local_rank in [-1, 0]:
             tb_writer.close()
