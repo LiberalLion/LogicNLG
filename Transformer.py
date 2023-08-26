@@ -24,7 +24,7 @@ def parse_opt():
     parser.add_argument('--do_val', default=False, action="store_true", help="whether to train or test the model")
     parser.add_argument('--do_verify', default=False, action="store_true", help="whether to train or test the model")
     parser.add_argument('--do_test', default=False, action="store_true", help="whether to train or test the model")
-    parser.add_argument('--do_ppl', default=False, action="store_true", help="whether to train or test the model")    
+    parser.add_argument('--do_ppl', default=False, action="store_true", help="whether to train or test the model")
     parser.add_argument('--epoch', default=10, type=int, help="whether to train or test the model")
     parser.add_argument('--every', default=50, type=int, help="whether to train or test the model")
     parser.add_argument('--dim', default=256, type=int, help="whether to train or test the model")
@@ -32,8 +32,7 @@ def parse_opt():
     parser.add_argument('--head', default=4, type=int, help="whether to train or test the model")
     parser.add_argument('--load_from', default='', type=str, help="whether to train or test the model")
     parser.add_argument('--dataset', default='table', type=str, help="whether to train or test the model")
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 if __name__ == "__main__":

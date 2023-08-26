@@ -41,8 +41,7 @@ class Dataloader(object):
 
     def get_table_id(self, idx, option='test'):
         assert option == 'test'
-        table_id = self.test_ids[idx]
-        return table_id
+        return self.test_ids[idx]
 
     def shuffle(self):
         random.shuffle(self.train_ids)
@@ -95,7 +94,7 @@ class GPTTableDatabase(Dataloader):
             seqs.append(self.tokenizer.encode(e[0]))
             tmp = ""
             for i in range(len(d)):
-                tmp += 'In row {} , '.format(i + 1)
+                tmp += f'In row {i + 1} , '
                 for _ in e[1]:
                     if isinstance(d.iloc[i][columns[_]], str):
                         entity = map(lambda x: x.capitalize(), d.iloc[i][columns[_]].split(' '))
@@ -103,25 +102,25 @@ class GPTTableDatabase(Dataloader):
                     else:
                         entity = str(d.iloc[i][columns[_]])
 
-                    tmp += 'the {} is {} , '.format(columns[_], entity)
+                    tmp += f'the {columns[_]} is {entity} , '
                 tmp = tmp[:-3] + ' . '
 
             tmp_idx = self.tokenizer.tokenize(tmp)
             if len(tmp_idx) > self.max_len:
                 tmp_idx = tmp_idx[:self.max_len]
 
-            tmp_prefix = self.tokenizer.tokenize('Given the table title of "{}" . '.format(e[2]))
+            tmp_prefix = self.tokenizer.tokenize(f'Given the table title of "{e[2]}" . ')
             tmp_suffix = self.tokenizer.tokenize('Start describing : ')
 
             descs.append(self.tokenizer.convert_tokens_to_ids(tmp_prefix + tmp_idx + tmp_suffix))
 
-        length = max([len(_) for _ in seqs]) + 1
+        length = max(len(_) for _ in seqs) + 1
 
         for i in range(len(seqs)):
             seqs[i] += (length - len(seqs[i])) * [self.tokenizer.eos_token_id]
         seqs = torch.LongTensor(seqs)
 
-        length = max([len(_) for _ in descs]) + 1
+        length = max(len(_) for _ in descs) + 1
         for i in range(len(descs)):
             descs[i] = (length - len(descs[i])) * [self.tokenizer.eos_token_id] + descs[i]
         descs = torch.LongTensor(descs)
@@ -152,12 +151,12 @@ class GPTTableDatabase(Dataloader):
                     opt = 'unknown1'
                 if opt not in e and opt == 'neg':
                     opt = 'unknown2'
-                    
+
                 e = e[opt]
                 seqs.append(self.tokenizer.encode(e[0]))
                 tmp = ""
                 for i in range(len(d)):
-                    tmp += 'In row {} , '.format(i + 1)
+                    tmp += f'In row {i + 1} , '
                     for _ in e[1]:
                         if isinstance(d.iloc[i][columns[_]], str):
                             entity = map(lambda x: x.capitalize(), d.iloc[i][columns[_]].split(' '))
@@ -165,25 +164,25 @@ class GPTTableDatabase(Dataloader):
                         else:
                             entity = str(d.iloc[i][columns[_]])
 
-                        tmp += 'the {} is {} , '.format(columns[_], entity)
+                        tmp += f'the {columns[_]} is {entity} , '
                     tmp = tmp[:-3] + ' . '
 
                 tmp_idx = self.tokenizer.tokenize(tmp)
                 if len(tmp_idx) > self.max_len:
                     tmp_idx = tmp_idx[:self.max_len]
 
-                tmp_prefix = self.tokenizer.tokenize('Given the table title of "{}" . '.format(e[2]))
+                tmp_prefix = self.tokenizer.tokenize(f'Given the table title of "{e[2]}" . ')
                 tmp_suffix = self.tokenizer.tokenize('Start describing : ')
 
                 descs.append(self.tokenizer.convert_tokens_to_ids(tmp_prefix + tmp_idx + tmp_suffix))
 
-            length = max([len(_) for _ in seqs]) + 1
+            length = max(len(_) for _ in seqs) + 1
 
             for i in range(len(seqs)):
                 seqs[i] += (length - len(seqs[i])) * [self.tokenizer.eos_token_id]
             seqs = torch.LongTensor(seqs)
 
-            length = max([len(_) for _ in descs]) + 1
+            length = max(len(_) for _ in descs) + 1
             for i in range(len(descs)):
                 descs[i] = (length - len(descs[i])) * [self.tokenizer.eos_token_id] + descs[i]
             descs = torch.LongTensor(descs)
@@ -192,11 +191,9 @@ class GPTTableDatabase(Dataloader):
             seq_mask = (seqs != self.tokenizer.eos_token_id)[:, :-1].float()
             seq_mask = torch.cat([torch.FloatTensor(seq_mask.shape[0], 1).fill_(1.), seq_mask], 1)
 
-            inputs = seqs[:, :-1]
             outputs = seqs        
 
-            pairs.append((inputs, outputs, seq_mask, descs))
-
+            pairs.append((outputs[:, :-1], outputs, seq_mask, descs))
         return pairs
 
 class GPTTableCoarseFineDatabase(Dataloader):
@@ -235,7 +232,7 @@ class GPTTableCoarseFineDatabase(Dataloader):
 
             tmp = ""
             for i in range(len(d)):
-                tmp += 'In row {} , '.format(i + 1)
+                tmp += f'In row {i + 1} , '
                 for _ in e[1]:
                     if isinstance(d.iloc[i][columns[_]], str):
                         entity = map(lambda x: x.capitalize(), d.iloc[i][columns[_]].split(' '))
@@ -243,26 +240,26 @@ class GPTTableCoarseFineDatabase(Dataloader):
                     else:
                         entity = str(d.iloc[i][columns[_]])
 
-                    tmp += 'the {} is {} , '.format(columns[_], entity)
+                    tmp += f'the {columns[_]} is {entity} , '
                 tmp = tmp[:-3] + ' . '
 
             tmp_idx = self.tokenizer.tokenize(tmp)
             if len(tmp_idx) > self.max_len:
                 tmp_idx = tmp_idx[:self.max_len]
 
-            tmp_prefix = self.tokenizer.tokenize('Given the table title of "{}" . '.format(e[2]))
+            tmp_prefix = self.tokenizer.tokenize(f'Given the table title of "{e[2]}" . ')
 
             descs.append(self.tokenizer.convert_tokens_to_ids(tmp_prefix + tmp_idx))
 
-        length = max([len(_) for _ in seqs]) + 1
+        length = max(len(_) for _ in seqs) + 1
 
         for i in range(len(seqs)):
             seqs[i] += (length - len(seqs[i])) * [self.tokenizer.eos_token_id]
-            seq_masks[i] = seq_masks[i] + [1] + (length - len(seq_masks[i]) - 1) * [0] 
+            seq_masks[i] = seq_masks[i] + [1] + (length - len(seq_masks[i]) - 1) * [0]
         seqs = torch.LongTensor(seqs)
         seq_masks = torch.FloatTensor(seq_masks)
 
-        length = max([len(_) for _ in descs]) + 1
+        length = max(len(_) for _ in descs) + 1
         for i in range(len(descs)):
             descs[i] = (length - len(descs[i])) * [self.tokenizer.eos_token_id] + descs[i]
         descs = torch.LongTensor(descs)
@@ -305,10 +302,10 @@ class GPTTableCoarseFineDatabase(Dataloader):
                         seq_masks.append([0] * len(part1) + [1] * len(part2))                    
                     else:
                         raise NotImplementedError
-                
+
                 tmp = ""
                 for i in range(len(d)):
-                    tmp += 'In row {} , '.format(i + 1)
+                    tmp += f'In row {i + 1} , '
                     for _ in e[1]:
                         if isinstance(d.iloc[i][columns[_]], str):
                             entity = map(lambda x: x.capitalize(), d.iloc[i][columns[_]].split(' '))
@@ -316,33 +313,31 @@ class GPTTableCoarseFineDatabase(Dataloader):
                         else:
                             entity = str(d.iloc[i][columns[_]])
 
-                        tmp += 'the {} is {} , '.format(columns[_], entity)
+                        tmp += f'the {columns[_]} is {entity} , '
                     tmp = tmp[:-3] + ' . '
 
-                tmp_idx = self.tokenizer.tokenize('Given the table title of "{}" . {}'.format(e[2], tmp))
+                tmp_idx = self.tokenizer.tokenize(f'Given the table title of "{e[2]}" . {tmp}')
                 if len(tmp_idx) > self.max_len:
-                    tmp_idx = tmp_idx[:self.max_len]            
+                    tmp_idx = tmp_idx[:self.max_len]
                 #tmp_suffix = self.tokenizer.tokenize('Start describing : ')
 
                 descs.append(self.tokenizer.convert_tokens_to_ids(tmp_idx))
 
-            length = max([len(_) for _ in seqs]) + 1
+            length = max(len(_) for _ in seqs) + 1
             for i in range(len(seqs)):
                 seqs[i] += (length - len(seqs[i])) * [self.tokenizer.eos_token_id]
-                seq_masks[i] = seq_masks[i] + [1] + (length - len(seq_masks[i]) - 1) * [0] 
+                seq_masks[i] = seq_masks[i] + [1] + (length - len(seq_masks[i]) - 1) * [0]
             seqs = torch.LongTensor(seqs)
             seq_masks = torch.FloatTensor(seq_masks)
 
-            length = max([len(_) for _ in descs]) + 1
+            length = max(len(_) for _ in descs) + 1
             for i in range(len(descs)):
                 descs[i] = (length - len(descs[i])) * [self.tokenizer.eos_token_id] + descs[i]
             descs = torch.LongTensor(descs)
 
-            inputs = seqs[:, :-1]
             outputs = seqs
 
-            pairs.append((inputs, outputs, seq_masks, descs))
-        
+            pairs.append((outputs[:, :-1], outputs, seq_masks, descs))
         return pairs
 
 class GPTTableCoarseFineDatabase2(Dataloader):
@@ -392,27 +387,26 @@ class GPTTableCoarseFineDatabase2(Dataloader):
             if len(tmp_idx) > self.max_len:
                 tmp_idx = tmp_idx[:self.max_len]
 
-            tmp_prefix = self.tokenizer.tokenize('Given the table title of "{}" . '.format(e[2]))
+            tmp_prefix = self.tokenizer.tokenize(f'Given the table title of "{e[2]}" . ')
 
             descs.append(self.tokenizer.convert_tokens_to_ids(tmp_prefix + tmp_idx))
 
-        length = max([len(_) for _ in seqs]) + 1
+        length = max(len(_) for _ in seqs) + 1
 
         for i in range(len(seqs)):
             seqs[i] += (length - len(seqs[i])) * [self.tokenizer.eos_token_id]
-            seq_masks[i] = seq_masks[i] + [1] + (length - len(seq_masks[i]) - 1) * [0] 
+            seq_masks[i] = seq_masks[i] + [1] + (length - len(seq_masks[i]) - 1) * [0]
         seqs = torch.LongTensor(seqs)
         seq_masks = torch.FloatTensor(seq_masks)
 
-        length = max([len(_) for _ in descs]) + 1
+        length = max(len(_) for _ in descs) + 1
         for i in range(len(descs)):
             descs[i] = (length - len(descs[i])) * [self.tokenizer.eos_token_id] + descs[i]
         descs = torch.LongTensor(descs)
 
-        inputs = seqs[:, :-1]
         outputs = seqs
 
-        return inputs, outputs, seq_masks, descs
+        return outputs[:, :-1], outputs, seq_masks, descs
 
     def get_data(self, idx, option, details=False):
         table_id, entry = self.obtain_idx(idx, option)
@@ -437,7 +431,7 @@ class GPTTableCoarseFineDatabase2(Dataloader):
 
             tmp = ""
             for i in range(len(d)):
-                tmp += 'In row {} , '.format(i + 1)
+                tmp += f'In row {i + 1} , '
                 for _ in e[1]:
                     if isinstance(d.iloc[i][columns[_]], str):
                         entity = map(lambda x: x.capitalize(), d.iloc[i][columns[_]].split(' '))
@@ -445,26 +439,26 @@ class GPTTableCoarseFineDatabase2(Dataloader):
                     else:
                         entity = str(d.iloc[i][columns[_]])
 
-                    tmp += 'the {} is {} , '.format(columns[_], entity)
+                    tmp += f'the {columns[_]} is {entity} , '
                 tmp = tmp[:-3] + ' . '
 
             tmp_idx = self.tokenizer.tokenize(tmp)
             if len(tmp_idx) > self.max_len:
                 tmp_idx = tmp_idx[:self.max_len]
 
-            tmp_prefix = self.tokenizer.tokenize('Given the table title of "{}" . '.format(e[2]))
+            tmp_prefix = self.tokenizer.tokenize(f'Given the table title of "{e[2]}" . ')
 
             descs.append(self.tokenizer.convert_tokens_to_ids(tmp_prefix + tmp_idx))
 
-        length = max([len(_) for _ in seqs]) + 1
+        length = max(len(_) for _ in seqs) + 1
 
         for i in range(len(seqs)):
             seqs[i] += (length - len(seqs[i])) * [self.tokenizer.eos_token_id]
-            seq_masks[i] = seq_masks[i] + [1] + (length - len(seq_masks[i]) - 1) * [0] 
+            seq_masks[i] = seq_masks[i] + [1] + (length - len(seq_masks[i]) - 1) * [0]
         seqs = torch.LongTensor(seqs)
         seq_masks = torch.FloatTensor(seq_masks)
 
-        length = max([len(_) for _ in descs]) + 1
+        length = max(len(_) for _ in descs) + 1
         for i in range(len(descs)):
             descs[i] = (length - len(descs[i])) * [self.tokenizer.eos_token_id] + descs[i]
         descs = torch.LongTensor(descs)

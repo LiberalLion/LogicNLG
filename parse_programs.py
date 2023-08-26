@@ -39,15 +39,15 @@ class ParseNLIDataset(Dataset):
 
     @classmethod
     def convert(cls, sent, prog, title, tokenizer, max_len):
-        title = '[CLS] title : {} [SEP]'.format(title)
+        title = f'[CLS] title : {title} [SEP]'
         title_ids = tokenizer.encode(title, add_special_tokens=False)
         types = [1] * len(title_ids)
 
-        sent = '{} [SEP]'.format(sent)
+        sent = f'{sent} [SEP]'
         sent_ids = tokenizer.encode(sent, add_special_tokens=False)
         types += [0] * len(sent_ids)
 
-        prog = '{} [SEP]'.format(prog)
+        prog = f'{prog} [SEP]'
         prog_ids = tokenizer.encode(prog, add_special_tokens=False)
         types += [1] * len(prog_ids)
 
@@ -100,7 +100,7 @@ def get_model(model_type, model_name_or_path, cache_dir):
         do_lower_case=True,
         cache_dir=cache_dir,
     )
-    tokenizer.add_tokens(["[{}]".format(_) for _ in all_funcs])
+    tokenizer.add_tokens([f"[{_}]" for _ in all_funcs])
     tokenizer.add_tokens(["all_rows"])
     model = BERTRanker(model_class, model_name_or_path, config, cache_dir)
     model.base.resize_token_embeddings(len(tokenizer))
@@ -111,7 +111,7 @@ def convert_program(program):
     arrays, _ = split_prog(program, True)
     for i in range(len(arrays) - 1):
         if arrays[i + 1] == '{':
-            arrays[i] = '[{}]'.format(arrays[i])
+            arrays[i] = f'[{arrays[i]}]'
     return " ".join(arrays)
 
 def evaluate(tokenizer, model, parser):
@@ -129,13 +129,13 @@ def evaluate(tokenizer, model, parser):
             table_names.append(k)
 
     cores = multiprocessing.cpu_count()
-    print("Using {} cores to run on {} instances".format(cores, len(positive_sents)))
+    print(f"Using {cores} cores to run on {len(positive_sents)} instances")
     pool = Pool(cores)
     pos_res = pool.map(parser.distribute_parse, zip(table_names, positive_sents))
     pool.close()
     pool.join()
 
-    print("Using {} cores to run on {} instances".format(cores, len(negative_sents)))
+    print(f"Using {cores} cores to run on {len(negative_sents)} instances")
     pool = Pool(cores)
     neg_res = pool.map(parser.distribute_parse, zip(table_names, negative_sents))
     pool.close()
@@ -145,12 +145,12 @@ def evaluate(tokenizer, model, parser):
     tp, tn, fp, fn = 0, 0, 0, 0
     for res, polarity in zip([pos_res, neg_res], [True, False]):
         for sent, programs, title in res:
-            labels = []
             token_ids = []
             types = []
             masks = []
-            
+
             if len(programs) > 0:
+                labels = []
                 for prog in programs[:64]:
                     token_id, type_, mask = ParseNLIDataset.convert(sent, convert_program(prog), title, tokenizer, 120)
                     token_ids.append(token_id)
@@ -161,7 +161,7 @@ def evaluate(tokenizer, model, parser):
                 token_ids = torch.LongTensor(token_ids).to(device)
                 types = torch.LongTensor(types).to(device)
                 masks = torch.LongTensor(masks).to(device)
-                
+
                 probs = model.prob(token_ids, types, masks)
                 pred = labels[torch.argmax(probs, 0).item()]
             else:
@@ -169,17 +169,19 @@ def evaluate(tokenizer, model, parser):
 
             if pred and polarity:
                 tp += 1
-            elif pred and not polarity:
+            elif pred:
                 fp += 1
-            elif not pred and polarity:
+            elif polarity:
                 fn += 1
             else:
                 tn += 1
 
-            sys.stdout.write("TP={},TN={},FP={},FN={},ACC={} \r".format(tp, tn, fp, fn, (tp + tn)/(tp + tn + fp + fn)))
+            sys.stdout.write(
+                f"TP={tp},TN={tn},FP={fp},FN={fn},ACC={(tp + tn) / (tp + tn + fp + fn)} \r"
+            )
 
     accuracy = (tp + tn)/(tp + tn + fp + fn)
-    print("TP={},TN={},FP={},FN={},ACC={}".format(tp, tn, fp, fn, accuracy))
+    print(f"TP={tp},TN={tn},FP={fp},FN={fn},ACC={accuracy}")
     model.train()
 
     return accuracy
@@ -231,21 +233,17 @@ if __name__ == '__main__':
 
         def func(inputs):
             index, table_name, title, sent, parse = inputs
-            
-            if os.path.exists('data/bootstrap_programs/{}/{}'.format('fail', table_name)) or\
-                os.path.exists('data/bootstrap_programs/{}/{}'.format('success', table_name)):
-                return
-            else:
-                rs, masked_sent, mapping = model.parse(table_name, sent)
-                result = 'fail'
-                for r in rs:
-                    if program_eq(r, parse):
-                        result = 'success'
-                        break
-                output_file = 'data/bootstrap_programs/{}/{}'.format(result, table_name)
 
-                with open(output_file, 'w') as f:
-                    json.dump((table_name, sent, title, rs, parse, masked_sent, mapping), f, indent=2)
+            if os.path.exists(
+                f'data/bootstrap_programs/fail/{table_name}'
+            ) or os.path.exists(f'data/bootstrap_programs/success/{table_name}'):
+                return
+            rs, masked_sent, mapping = model.parse(table_name, sent)
+            result = next(('success' for r in rs if program_eq(r, parse)), 'fail')
+            output_file = f'data/bootstrap_programs/{result}/{table_name}'
+
+            with open(output_file, 'w') as f:
+                json.dump((table_name, sent, title, rs, parse, masked_sent, mapping), f, indent=2)
 
         cores = multiprocessing.cpu_count()
         print("Using {} cores for {} instances".format(cores, len(sents)))
@@ -272,13 +270,11 @@ if __name__ == '__main__':
 
         def func(inputs):
             index, table_name, title, sent = inputs
-            output_file = 'data/all_programs/{}_program.json'.format(index)
+            output_file = f'data/all_programs/{index}_program.json'
             if not os.path.exists(output_file):
                 rs, masked_sent, mapping = model.parse(table_name, sent)
                 with open(output_file, 'w') as f:
                     json.dump((table_name, sent, title, rs, None, masked_sent, mapping), f, indent=2)
-            else:
-                pass
 
         cores = multiprocessing.cpu_count()
         print("Using {} cores for {} instances".format(cores, len(sents)))
@@ -303,13 +299,11 @@ if __name__ == '__main__':
 
         def func(inputs):
             index, table_name, title, sent = inputs
-            output_file = 'data/all_adv_programs/{}_program.json'.format(index)
+            output_file = f'data/all_adv_programs/{index}_program.json'
             if not os.path.exists(output_file):
                 rs, masked_sent, mapping = model.parse(table_name, sent)
                 with open(output_file, 'w') as f:
                     json.dump((table_name, sent, title, rs, None, masked_sent, mapping), f, indent=2)
-            else:
-                pass
 
         cores = multiprocessing.cpu_count()
         print("Using {} cores for {} instances".format(cores, len(sents)))

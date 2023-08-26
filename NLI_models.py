@@ -265,7 +265,7 @@ class NumGNN(nn.Module):
         d_node_neighbor_num_mask = (d_node_neighbor_num >= 1).long()
         d_node_neighbor_num = util.replace_masked_values(d_node_neighbor_num.float(), d_node_neighbor_num_mask, 1)
 
-        for step in range(self.iteration_steps):
+        for _ in range(self.iteration_steps):
             d_node_weight = torch.sigmoid(self._node_weight_fc(d_node)).squeeze(-1)
 
             self_d_node_info = self._self_node_fc(d_node)
@@ -331,14 +331,11 @@ class GNN(nn.Module):
 
     def forward(self, forward_type, **kwargs):
         if forward_type == 'row':
-            outputs = self.BASE(**kwargs)
-            return outputs
+            return self.BASE(**kwargs)
         elif forward_type == 'gnn':
-            outputs = self.gnn(**kwargs)
-            return outputs
+            return self.gnn(**kwargs)
         elif forward_type == 'emb':
-            outputs = self.embedding(kwargs['x'])
-            return outputs
+            return self.embedding(kwargs['x'])
         elif forward_type == 'sa':
             outputs = self.biflow(**kwargs)
             return self.classifier(outputs[:, 0])
